@@ -4,6 +4,22 @@
 
 ### One-Step Object-Effect Removal via Region-Calibrated Distribution Matching and Fusion
 
+<p>
+<a href="https://guocalix.github.io/">Jiawei Guo</a><sup>1</sup>,
+Junxian Li<sup>1</sup>,
+Yixin Tang<sup>1</sup>,
+Bingya Zhang<sup>2</sup>,
+Jiaxin Lu<sup>2</sup>,
+<a href="https://yulunzhang.com/">Yulun Zhang</a><sup>1,&dagger;</sup>,
+<a href="https://shangchenzhou.com/">Shangchen Zhou</a><sup>3,&dagger;</sup>
+<br>
+<sup>1</sup> Shanghai Jiao Tong University &nbsp;&nbsp;
+<sup>2</sup> Honor Device Co., Ltd &nbsp;&nbsp;
+<sup>3</sup> Imperial College London
+<br>
+<sup>&dagger;</sup> Corresponding authors
+</p>
+
 [![Project Page](https://img.shields.io/badge/Project-Page-24292f?style=flat-square&logo=googlechrome&logoColor=white)](https://guocalix.github.io/TurboClear/)
 ![Paper](https://img.shields.io/badge/Paper-TBD-8c8c8c?style=flat-square&logo=arxiv&logoColor=white)
 ![Model Weights](https://img.shields.io/badge/Model_Weights-TBD-8c8c8c?style=flat-square&logo=huggingface&logoColor=white)
