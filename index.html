@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="TurboClear is a one-step SDXL-based model for removing objects and their associated visual effects while preserving the background.">
+    <meta name="theme-color" content="#f7f8f6">
+    <title>TurboClear | One-Step Object-Effect Removal</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="wordmark" href="#top" aria-label="TurboClear home">
+        <span class="wordmark-mark" aria-hidden="true"></span>
+        TurboClear
+      </a>
+      <nav aria-label="Primary navigation">
+        <a href="#results">Results</a>
+        <a href="#method">Method</a>
+        <a href="#efficiency">Efficiency</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero" aria-labelledby="hero-title">
+        <p class="eyebrow">One-step object-effect removal</p>
+        <h1 id="hero-title">TurboClear</h1>
+        <p class="paper-title">One-Step Object-Effect Removal via Region-Calibrated Distribution Matching and Fusion</p>
+        <p class="hero-summary">
+          Remove the target object, its shadow, reflection, and other visual effects in a single denoising step while keeping unaffected regions intact.
+        </p>
+        <div class="resource-links" aria-label="Project resources">
+          <span class="resource-button is-disabled" aria-disabled="true">
+            <span class="resource-icon" aria-hidden="true">P</span>
+            Paper <small>TBD</small>
+          </span>
+          <span class="resource-button is-disabled" aria-disabled="true">
+            <span class="resource-icon" aria-hidden="true">M</span>
+            Model Weights <small>TBD</small>
+          </span>
+          <a class="resource-button" href="https://github.com/GuoCalix/TurboClear" target="_blank" rel="noreferrer">
+            <span class="resource-icon" aria-hidden="true">G</span>
+            Project
+          </a>
+        </div>
+      </section>
+
+      <section class="demo-band" aria-label="Interactive TurboClear results">
+        <div class="demo-grid">
+          <article class="comparison" style="--position: 52%">
+            <img class="comparison-after" src="assets/images/318-result.webp" alt="Calm lake after TurboClear removes a sailboat and its reflection">
+            <div class="comparison-before">
+              <img src="assets/images/318-input.webp" alt="Sailboat and reflection selected with a green mask">
+            </div>
+            <input type="range" min="0" max="100" value="52" aria-label="Compare masked sailboat input and TurboClear result">
+            <div class="comparison-handle" aria-hidden="true"><span>&harr;</span></div>
+            <span class="image-label label-before">Input + mask</span>
+            <span class="image-label label-after">TurboClear</span>
+          </article>
+
+          <article class="comparison" style="--position: 50%">
+            <img class="comparison-after" src="assets/images/302-result.webp" alt="Desert landscape after TurboClear removes a person and the cast shadow">
+            <div class="comparison-before">
+              <img src="assets/images/302-input.webp" alt="Person and cast shadow selected with a green mask in a desert">
+            </div>
+            <input type="range" min="0" max="100" value="50" aria-label="Compare masked person input and TurboClear result">
+            <div class="comparison-handle" aria-hidden="true"><span>&harr;</span></div>
+            <span class="image-label label-before">Input + mask</span>
+            <span class="image-label label-after">TurboClear</span>
+          </article>
+
+          <article class="comparison" style="--position: 48%">
+            <img class="comparison-after" src="assets/images/281-result.webp" alt="Lake landscape after TurboClear removes a bridge and its reflection">
+            <div class="comparison-before">
+              <img src="assets/images/281-input.webp" alt="Bridge selected with a green mask over a lake">
+            </div>
+            <input type="range" min="0" max="100" value="48" aria-label="Compare masked bridge input and TurboClear result">
+            <div class="comparison-handle" aria-hidden="true"><span>&harr;</span></div>
+            <span class="image-label label-before">Input + mask</span>
+            <span class="image-label label-after">TurboClear</span>
+          </article>
+        </div>
+        <p class="drag-caption">Drag each divider to inspect the input and result.</p>
+      </section>
+
+      <section class="metrics" aria-label="TurboClear at a glance">
+        <div><strong>1</strong><span>denoising step</span></div>
+        <div><strong>1.589 T</strong><span>denoising FLOPs on OBER-Test</span></div>
+        <div><strong>40.04&times;</strong><span>less computation than ObjectClear</span></div>
+        <div><strong>665&times;</strong><span>less computation than OmniPaint</span></div>
+      </section>
+
+      <section class="content-section abstract-section" aria-labelledby="abstract-title">
+        <div class="section-heading">
+          <p class="eyebrow">Why TurboClear</p>
+          <h2 id="abstract-title">Edit what matters. Preserve what does not.</h2>
+        </div>
+        <div class="abstract-copy">
+          <p>
+            Object removal must reconstruct areas influenced by the target while leaving unrelated content unchanged. Generic one-step objectives do not explicitly model this spatial asymmetry, which can leave residual effects or introduce unnecessary background changes.
+          </p>
+          <p>
+            TurboClear couples <strong>Region-Calibrated Distribution Matching</strong> with <strong>Learnable Spatial Fusion</strong>. The resulting SDXL-based student preserves the teacher's asymmetric edit-and-preserve behavior while reducing iterative diffusion inference to one step.
+          </p>
+        </div>
+      </section>
+
+      <section class="content-section" id="results" aria-labelledby="results-title">
+        <div class="section-heading centered">
+          <p class="eyebrow">Qualitative results</p>
+          <h2 id="results-title">Objects disappear. Structure stays.</h2>
+          <p>Examples selected from the qualitative comparison in the paper.</p>
+        </div>
+        <div class="result-grid">
+          <article class="comparison" style="--position: 50%">
+            <img class="comparison-after" src="assets/images/295-result.webp" alt="Patio after TurboClear removes a foreground chair">
+            <div class="comparison-before">
+              <img src="assets/images/295-input.webp" alt="Foreground chair selected with a green mask on a patio">
+            </div>
+            <input type="range" min="0" max="100" value="50" aria-label="Compare masked chair input and TurboClear result">
+            <div class="comparison-handle" aria-hidden="true"><span>&harr;</span></div>
+            <span class="image-label label-before">Input + mask</span>
+            <span class="image-label label-after">TurboClear</span>
+          </article>
+          <article class="comparison" style="--position: 50%">
+            <img class="comparison-after" src="assets/images/451-result.webp" alt="Open field after TurboClear removes a foreground cow and its shadow">
+            <div class="comparison-before">
+              <img src="assets/images/451-input.webp" alt="Foreground cow selected with a green mask">
+            </div>
+            <input type="range" min="0" max="100" value="50" aria-label="Compare masked cow input and TurboClear result">
+            <div class="comparison-handle" aria-hidden="true"><span>&harr;</span></div>
+            <span class="image-label label-before">Input + mask</span>
+            <span class="image-label label-after">TurboClear</span>
+          </article>
+        </div>
+
+        <figure class="wide-figure">
+          <img src="assets/images/full-comparison.webp" alt="Full qualitative comparison of TurboClear and prior object removal methods" loading="lazy">
+          <figcaption>Extended comparison across representative OBER-Test examples. The complete figure is retained for detailed inspection rather than used as the primary visual.</figcaption>
+        </figure>
+      </section>
+
+      <section class="method-band" id="method" aria-labelledby="method-title">
+        <div class="content-section">
+          <div class="section-heading centered">
+            <p class="eyebrow">Method</p>
+            <h2 id="method-title">Region-aware distillation, spatially learned fusion</h2>
+          </div>
+          <figure class="method-figure">
+            <img src="assets/images/pipeline.webp" alt="TurboClear training and inference pipeline with RDM and LSF" loading="lazy">
+            <figcaption>
+              RDM calibrates distribution matching across affected and preserved regions during training. At inference, LSF predicts latent- and pixel-space gates to combine the generated output with the input stream.
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="content-section efficiency-section" id="efficiency" aria-labelledby="efficiency-title">
+        <div class="efficiency-copy">
+          <p class="eyebrow">Efficiency</p>
+          <h2 id="efficiency-title">Quality without the iterative cost</h2>
+          <p>
+            TurboClear reaches the strongest PSNR in the comparison while using substantially fewer denoising FLOPs than multi-step diffusion removal systems. Bubble area denotes model parameter count.
+          </p>
+        </div>
+        <figure>
+          <img src="assets/images/efficiency.webp" alt="PSNR versus denoising FLOPs and parameter count for object removal methods" loading="lazy">
+        </figure>
+      </section>
+
+      <section class="release-band" aria-labelledby="release-title">
+        <div>
+          <p class="eyebrow">Resources</p>
+          <h2 id="release-title">Release status</h2>
+        </div>
+        <dl class="release-list">
+          <div><dt>Paper</dt><dd>TBD</dd></div>
+          <div><dt>Model weights</dt><dd>TBD</dd></div>
+          <div><dt>Code</dt><dd>TBD</dd></div>
+          <div><dt>Usage guide</dt><dd>TBD</dd></div>
+        </dl>
+      </section>
+    </main>
+
+    <footer>
+      <a class="wordmark" href="#top"><span class="wordmark-mark" aria-hidden="true"></span>TurboClear</a>
+      <p>Project page for TurboClear. Paper, code, and model resources are forthcoming.</p>
+      <a href="https://github.com/GuoCalix/TurboClear" target="_blank" rel="noreferrer">GitHub</a>
+    </footer>
+
+    <script src="script.js"></script>
+  </body>
+</html>
