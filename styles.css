@@ -142,6 +142,10 @@ h1 {
   text-underline-offset: 3px;
 }
 
+.authors .author-placeholder {
+  cursor: default;
+}
+
 .authors span {
   white-space: nowrap;
 }
@@ -488,6 +492,43 @@ figcaption {
   margin: 0;
 }
 
+.citation-section {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.4fr) minmax(0, 1.6fr);
+  gap: 56px;
+  align-items: start;
+  border-top: 1px solid var(--line);
+}
+
+.citation-section > div > p:last-child {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.citation-section pre {
+  margin: 0;
+  padding: 22px 24px;
+  overflow-x: auto;
+  border: 1px solid #343936;
+  border-radius: 8px;
+  background: #1d211f;
+  color: #eef4f1;
+  font: 12px/1.7 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre;
+}
+
+.release-list a {
+  color: var(--green-dark);
+  text-decoration: none;
+}
+
+.release-list a:hover,
+.release-list a:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .release-band {
   width: min(calc(100% - 40px), var(--content));
   margin: 0 auto 96px;
@@ -576,7 +617,8 @@ footer > a:last-child {
   }
 
   .abstract-section,
-  .efficiency-section {
+  .efficiency-section,
+  .citation-section {
     grid-template-columns: 1fr;
     gap: 36px;
   }

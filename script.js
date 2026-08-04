@@ -8,3 +8,7 @@ document.querySelectorAll('.comparison').forEach((comparison) => {
   range.addEventListener('input', updatePosition);
   updatePosition();
 });
+
+document.querySelectorAll('.author-placeholder').forEach((link) => {
+  link.addEventListener('click', (event) => event.preventDefault());
+});
