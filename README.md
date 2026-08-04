@@ -6,10 +6,10 @@
 
 <p>
 <a href="https://guocalix.github.io/">Jiawei Guo</a><sup>1</sup>,
-Junxian Li<sup>1</sup>,
-Yixin Tang<sup>1</sup>,
-Bingya Zhang<sup>2</sup>,
-Jiaxin Lu<sup>2</sup>,
+<a href="#">Junxian Li</a><sup>1</sup>,
+<a href="#">Yixin Tang</a><sup>1</sup>,
+<a href="#">Bingya Zhang</a><sup>2</sup>,
+<a href="#">Jiaxin Lu</a><sup>2</sup>,
 <a href="https://yulunzhang.com/">Yulun Zhang</a><sup>1,&dagger;</sup>,
 <a href="https://shangchenzhou.com/">Shangchen Zhou</a><sup>3,&dagger;</sup>
 <br>
@@ -21,7 +21,8 @@ Jiaxin Lu<sup>2</sup>,
 </p>
 
 [![Project Page](https://img.shields.io/badge/Project-Page-24292f?style=flat-square&logo=googlechrome&logoColor=white)](https://guocalix.github.io/TurboClear/)
-![Paper](https://img.shields.io/badge/Paper-TBD-8c8c8c?style=flat-square&logo=arxiv&logoColor=white)
+[![Paper](https://img.shields.io/badge/Paper-arXiv-b31b1b?style=flat-square&logo=arxiv&logoColor=white)](https://arxiv.org/abs/2608.01288)
+[![PDF](https://img.shields.io/badge/PDF-Download-b31b1b?style=flat-square&logo=adobeacrobatreader&logoColor=white)](https://arxiv.org/pdf/2608.01288)
 ![Model Weights](https://img.shields.io/badge/Model_Weights-TBD-8c8c8c?style=flat-square&logo=huggingface&logoColor=white)
 
 **TurboClear removes target objects and their associated visual effects with a single denoising step while preserving unaffected background regions.**
@@ -47,14 +48,21 @@ TurboClear addresses the spatial asymmetry of object-effect removal: regions inf
 
 | Resource | Status |
 | --- | --- |
-| Paper | TBD |
+| Paper | [arXiv:2608.01288](https://arxiv.org/abs/2608.01288) |
 | Model weights | TBD |
 | Code | TBD |
 | Usage guide | TBD |
 
 ## Citation
 
-TBD
+```bibtex
+@article{guo2026turboclear,
+  title={TurboClear: One-Step Object-Effect Removal via Region-Calibrated Distribution Matching and Fusion},
+  author={Guo, Jiawei and Li, Junxian and Tang, Yixin and Zhang, Bingya and Lu, Jiaxin and Zhang, Yulun and Zhou, Shangchen},
+  journal={arXiv preprint arXiv:2608.01288},
+  year={2026}
+}
+```
 
 ## Acknowledgements
 
