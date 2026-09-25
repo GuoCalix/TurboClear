@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="https://raw.githubusercontent.com/GuoCalix/TurboClear/page/assets/turboclear-mark.svg" width="88" alt="TurboClear logo">
+
 # TurboClear
 
 ### One-Step Object-Effect Removal via Region-Calibrated Distribution Matching and Fusion

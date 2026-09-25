@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" role="img" aria-labelledby="title desc">
+  <title id="title">TurboClear logo option B</title>
+  <desc id="desc">A green image tile crossed by a gold erase stroke, suggesting fast object removal.</desc>
+  <defs>
+    <linearGradient id="tile" x1="35" y1="31" x2="124" y2="129" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#20c88a"/>
+      <stop offset="1" stop-color="#08744d"/>
+    </linearGradient>
+    <linearGradient id="sweep" x1="33" y1="120" x2="126" y2="37" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#e4a322"/>
+      <stop offset="1" stop-color="#ffd86b"/>
+    </linearGradient>
+  </defs>
+  <rect x="10" y="10" width="140" height="140" rx="42" fill="#18201d"/>
+  <rect x="36" y="35" width="88" height="88" rx="18" fill="url(#tile)"/>
+  <path d="M29 119 113 35" fill="none" stroke="#f7f8f6" stroke-linecap="round" stroke-width="24"/>
+  <path d="M29 119 113 35" fill="none" stroke="url(#sweep)" stroke-linecap="round" stroke-width="13"/>
+  <path d="M117 119h14M126 105h8" fill="none" stroke="#e4a322" stroke-linecap="round" stroke-width="6"/>
+</svg>
