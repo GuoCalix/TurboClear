@@ -1,0 +1,659 @@
+import logging
+from typing import Any, Callable, Dict, List, Optional, Union
+import os
+import torch
+import random
+from tqdm.auto import tqdm
+from accelerate.logging import get_logger
+from contextlib import nullcontext
+from peft import LoraConfig, get_peft_model
+from FDL_pytorch import FDL_loss
+from HYPIR.utils.ema import EMAModel
+try:
+    from peft import mark_only_lora_as_trainable
+except ImportError:
+    def mark_only_lora_as_trainable(model):
+        for name, param in model.named_parameters():
+            param.requires_grad = "lora_" in name
+from HYPIR.utils.common import (
+    instantiate_from_config,
+    log_txt_as_img,
+    print_vram_state,
+    SuppressLogging,
+    module_param_memory,
+    human_bytes,
+)
+import torch.nn.functional as F
+from diffusers import (
+    AutoencoderKL,
+    FlowMatchEulerDiscreteScheduler,
+)
+from HYPIR.utils.common import instantiate_from_config, log_txt_as_img, print_vram_state, SuppressLogging
+from HYPIR.model.backbone import CNNRefiner
+from HYPIR.model.D import ImageConvNextDiscriminator
+from HYPIR.model.D_sd35 import SD3Discriminator
+from HYPIR.model.D_patchwise import SD3PatchDiscriminator
+from HYPIR.model.D_zimage import ZImagePatchDiscriminator
+from HYPIR.model.transformer_z_image import ZImageTransformer2DModel
+from transformers import AutoTokenizer, PreTrainedModel, PretrainedConfig
+from HYPIR.trainer.base_irepa import BaseTrainer, BatchInput
+from HYPIR.utils.others import NoOpContext, EdgeDetectionModel, total_variation_loss
+
+logger = get_logger(__name__, log_level="INFO")
+
+# Copied from dreambooth sd3 example
+def import_model_class_from_model_name_or_path(
+    pretrained_model_name_or_path: str, subfolder: str = "text_encoder"
+):
+    text_encoder_config = PretrainedConfig.from_pretrained(
+        pretrained_model_name_or_path, subfolder=subfolder
+    )
+    model_class = text_encoder_config.architectures[0]
+    if model_class == "Qwen3ForCausalLM":
+        from transformers import Qwen3ForCausalLM
+
+        return Qwen3ForCausalLM
+    else:
+        raise "Invalid Text Encoder"
+
+
+# Copied from dreambooth sd3 example
+def load_text_encoder(class_text_encoder, args):
+    text_encoder = class_text_encoder.from_pretrained(
+        args.base_model_path, subfolder="text_encoder"
+    )
+    return text_encoder
+
+def preprocess_raw_image(x, enc_type):
+    resolution = x.shape[-1]
+    from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+    from torchvision.transforms import Normalize
+    if 'mocov3' in enc_type or 'mae' in enc_type:
+        x = x / 255.
+        x = Normalize(IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD)(x)
+    elif 'dinov2' in enc_type:
+        # x = x / 255. Already normalized in Realsrgan
+        x = Normalize(IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD)(x)
+        x = torch.nn.functional.interpolate(x, 224 * (resolution // 256), mode='bicubic')
+    elif 'dinov1' in enc_type:
+        x = x / 255.
+        x = Normalize(IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD)(x)
+    elif 'jepa' in enc_type:
+        x = x / 255.
+        x = Normalize(IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD)(x)
+        x = torch.nn.functional.interpolate(x, 224 * (resolution // 256), mode='bicubic')
+
+    return x
+
+class ZImageREPATrainer(BaseTrainer):
+    def step(self, latents, noise_pred, sigmas, step_i):
+        return latents.float() - (sigmas[step_i] - sigmas[step_i + 1]) * noise_pred.float()    
+    
+    def init_scheduler(self):
+        self.scheduler = FlowMatchEulerDiscreteScheduler.from_pretrained(
+            self.config.base_model_path, subfolder="scheduler"
+        )
+
+    def init_dataset(self):
+        super().init_dataset()
+        # load from saved debug inputs
+        # if not self.config.use_txt:
+            # pos_promt_emb = torch.load(f"debug_inputs/prompt_embeds.pt")
+            # self.c_txt = {"prompt_embeds": [pos_promt_emb.to(self.device)]}
+        
+    def prepare_batch_inputs(self, batch, transform=None):
+        if transform == None:
+            transform = self.batch_transform
+        batch = transform(batch)
+        gt = (batch["GT"] * 2 - 1).float().to(self.device)
+        lq = (batch["LQ"] * 2 - 1).float().to(self.device)
+        bs = lq.shape[0]
+        z_lq = self.vae.encode(lq.to(device=self.device, dtype=self.weight_dtype)).latent_dist.sample()
+        z_gt = self.vae.encode(gt.to(device=self.device, dtype=self.weight_dtype)).latent_dist.sample()
+        timesteps = torch.full((bs,), self.config.model_t, dtype=torch.long, device=self.device)
+        prompt = batch["txt"]
+        with torch.no_grad():
+            if self.config.use_txt:
+                prompt_embeds, _ = self.encode_prompt(prompt=prompt)
+                self.c_txt={
+                    "prompt_embeds": prompt_embeds,
+                }
+            else:
+                pos_promt_emb = torch.load(f"debug_inputs/prompt_embeds.pt")
+                self.c_txt = {"prompt_embeds": [pos_promt_emb.to(self.device)] * bs}
+
+            if self.config.use_repa:
+                zs = []
+                with self.accelerator.autocast():
+                    for encoder, encoder_type in zip(self.repa_encoders, ['dinov2']):
+                        raw_image_ = preprocess_raw_image(gt, encoder_type)
+                        features = encoder.forward_features(raw_image_)
+                        
+                        spnorm_kwargs = {
+                            'feat': features['x_norm_patchtokens'],
+                            'cls': features['x_norm_clstoken'],
+                            'cls_weight': self.config.cls_token_weight,
+                            'zscore_alpha': self.config.zscore_alpha,
+                            'zscore_proj_skip_std': self.config.zscore_proj_skip_std,
+                        }
+
+                        z = self.spnorm(**spnorm_kwargs)
+                        zs.append(z)
+            else:
+                zs = []
+        self.batch_inputs = BatchInput(
+            gt=gt, lq=lq, z_s=zs,
+            z_lq=z_lq, z_gt=z_gt,
+            timesteps=timesteps,
+        )   
+    
+    def init_repa(self):
+        from iREPA.ldm.vision_encoder import load_encoders
+        from iREPA.ldm.utils import SpatialNormalization, ALL_SPNORM_METHODS
+        self.spnorm = SpatialNormalization(method="zscore")
+        if self.config.enc_type != None:
+            self.repa_encoders = load_encoders(
+                self.config.enc_type, self.device, resolution=1024
+            )
+        else:
+            raise NotImplementedError()
+
+    def init_models(self):
+        print(f"Use VAE: {self.config.use_vae}, Use D: {self.config.use_D}, Use EMA: {self.config.use_ema}")
+        self.init_scheduler()
+        if getattr(self.config, "use_vae", True):
+            self.init_vae()
+        self.init_generator()
+        if getattr(self.config, "use_refiner", False):
+            self.init_refiner()
+        if getattr(self.config, "use_D", True):
+            self.init_discriminator()
+        if getattr(self.config, "use_vae", True):
+            self.init_lpips()
+            self.init_dists()
+        if getattr(self.config, "use_txt", False):
+            self.init_text_models()
+        try:
+            vae_bytes = module_param_memory(self.vae)
+            G_bytes_trainable = module_param_memory(self.G, only_trainable=True)
+            G_bytes_all = module_param_memory(self.G, only_trainable=False)
+            D_bytes = module_param_memory(self.D)
+            lpips_bytes = module_param_memory(self.net_lpips)
+            logger.info(
+                "[Param memory] VAE=%s, G(trainable)=%s, G(all)=%s, D=%s, LPIPS=%s",
+                human_bytes(vae_bytes),
+                human_bytes(G_bytes_trainable),
+                human_bytes(G_bytes_all),
+                human_bytes(D_bytes),
+                human_bytes(lpips_bytes),
+            )
+        except Exception as exc:
+            logger.warning(f"Param memory report failed: {exc}")
+
+    def init_vae(self):
+        self.vae = AutoencoderKL.from_pretrained(
+            self.config.base_model_path, subfolder="vae", torch_dtype=self.weight_dtype).to(self.device)
+
+        self.vae = self.vae.to(self.device, dtype=self.weight_dtype)
+        logger.info("✓ VAE loaded")
+        self.vae.eval().requires_grad_(False)
+        print_vram_state("After VAE to(device)", logger=logger)
+
+    def init_generator(self):
+        self.G = ZImageTransformer2DModel.from_pretrained(
+            self.config.base_model_path, 
+            low_cpu_mem_usage=False,
+            subfolder="transformer", 
+            torch_dtype=self.weight_dtype
+        ).to(self.device)
+
+        def safe_init_projector(module, scale=0.001):
+            """
+            专门针对 iREPA/REPA 投影层的安全初始化函数
+            """
+            if isinstance(module, (torch.nn.Linear, torch.nn.Conv2d)):
+                # 1. 使用截断正态分布，std 设为 0.02 是视觉模型的标准做法
+                torch.nn.init.trunc_normal_(module.weight, std=0.02)
+                
+                # 2. 关键步：手动缩小权重缩放因子
+                # 这能确保在 DiT 特征输入很大时，投影层的输出不溢出
+                with torch.no_grad():
+                    module.weight.data.mul_(scale)
+                    
+                # 3. 偏置置零
+                if module.bias is not None:
+                    torch.nn.init.constant_(module.bias, 0)
+        self.G.projectors.apply(safe_init_projector)
+
+        logger.info("✓ DiT model loaded")
+        print_vram_state("After DiT to(device)", logger=logger)
+
+        if getattr(self.config, "gradient_checkpointing", False):
+            if hasattr(self.G, "enable_gradient_checkpointing"):
+                self.G.enable_gradient_checkpointing()
+        if getattr(self.config, "gradient_checkpointing_mlp_only", False):
+            # Only checkpoint MLP paths in DiT blocks to reduce activation memory safely
+            try:
+                base_model = self.G
+                if hasattr(base_model, "get_base_model"):
+                    base_model = base_model.get_base_model()
+                if hasattr(base_model, "module"):
+                    base_model = base_model.module
+                base_model.enable_gradient_checkpointing_mlp_only()
+                logger.info("✓ Enabled MLP-only activation checkpointing")
+            except Exception as e:
+                logger.warning(f"Failed to enable MLP-only checkpointing: {e}")
+
+        target_patterns = list(getattr(self.config, "lora_modules", []) or [])
+        if target_patterns:
+            resolved_targets = self._resolve_lora_targets(self.G, target_patterns)
+            if not resolved_targets:
+                raise ValueError(
+                    f"Failed to match any LoRA target modules. Requested patterns: {target_patterns}"
+                )
+            logger.info(f"Add LoRA parameters to {resolved_targets}")
+            G_lora_cfg = LoraConfig(
+                r=self.config.lora_rank,
+                lora_alpha=self.config.lora_rank,
+                init_lora_weights="gaussian",
+                target_modules=target_patterns,
+                modules_to_save=["projectors"],
+            )
+            self.G = get_peft_model(self.G, G_lora_cfg)
+            mark_only_lora_as_trainable(self.G)
+            lora_params = [p for p in self.G.parameters() if p.requires_grad]
+            assert lora_params, "Failed to find LoRA parameters"
+            for p in lora_params:
+                p.data = p.data.to(device=self.device, dtype=torch.float32)
+            self.G.to(self.device)
+            self.lora_target_modules = resolved_targets
+            print_vram_state("After enabling LoRA", logger=logger)
+        else:
+            logger.warning("LoRA modules list is empty; generator will remain frozen.")
+
+        self._set_byt5_precision(self.weight_dtype)
+        # Ensure module is in training mode so gradient checkpointing can take effect,
+        # while keeping only LoRA params trainable
+        self.G.train()
+
+    def init_discriminator(self):
+        # Suppress logs from open-clip
+        ctx = (
+            nullcontext()
+            if self.accelerator.is_local_main_process
+            else SuppressLogging(logging.WARNING)
+        )
+        with ctx:
+            if getattr(self.config, "use_D_sd35", False):
+                self.D = SD3PatchDiscriminator(
+                    sd3_model_path=self.config.base_model_path, 
+                    dtype=self.weight_dtype
+                ).to(device=self.device)
+                logger.info("Init patchwise discriminator with SD3.5 DiT")
+            elif getattr(self.config, "use_D_zimage", False):
+                self.D = ZImagePatchDiscriminator(
+                    base_model_path=self.config.base_model_path,
+                    dtype=self.weight_dtype,
+                    device=self.device,
+                )
+                logger.info("Init patchwise discriminator with Z-Image DiT")
+                target_patterns = list(getattr(self.config, "lora_modules", []) or [])
+                if target_patterns:
+                    resolved_targets = self._resolve_lora_targets(self.D.backbone, target_patterns)
+                    if not resolved_targets:
+                        raise ValueError(
+                            f"Failed to match any LoRA target modules. Requested patterns: {target_patterns}"
+                        )
+                    logger.info(f"Discriminator: Add LoRA parameters to {resolved_targets}")
+                    D_lora_cfg = LoraConfig(
+                        r=self.config.lora_rank,
+                        lora_alpha=self.config.lora_rank,
+                        init_lora_weights="gaussian",
+                        target_modules=target_patterns,
+                    )
+                    self.D.backbone = get_peft_model(self.D.backbone, D_lora_cfg)
+                    mark_only_lora_as_trainable(self.D.backbone)
+                    lora_params = [p for p in self.D.backbone.parameters() if p.requires_grad]
+                    assert lora_params, "Failed to find LoRA parameters"
+                    for p in lora_params:
+                        p.data = p.data.to(device=self.device, dtype=torch.float32)
+                    self.D.to(self.device)
+                    self.lora_target_modules = resolved_targets
+                    self.D.train()
+                    print_vram_state("After enabling LoRA", logger=logger)
+            else:
+                self.D = ImageConvNextDiscriminator(precision="fp32").to(device=self.device)
+                self.D.train().requires_grad_(True)
+
+    def _resolve_lora_targets(self, model, target_patterns):
+        candidate_types = (
+            torch.nn.Linear,
+            torch.nn.Conv1d,
+            torch.nn.Conv2d,
+            torch.nn.Conv3d,
+        )
+        matched = []
+        for module_name, module in model.named_modules():
+            if not isinstance(module, candidate_types):
+                continue
+            if any(module_name.endswith(pattern) for pattern in target_patterns):
+                matched.append(module_name)
+        return sorted(set(matched))
+        
+    def init_text_models(self):
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            self.config.base_model_path,
+            subfolder="tokenizer",
+        )
+        
+        self.text_encoder_cls = import_model_class_from_model_name_or_path(
+            self.config.base_model_path, subfolder = "text_encoder"
+        )
+        
+        self.text_encoder = load_text_encoder(
+            self.text_encoder_cls, self.config
+        )
+
+        self.text_encoder.requires_grad_(False)
+        self.text_encoder.to(self.accelerator.device, dtype=self.weight_dtype)
+        logger.info("Load Text Tokenizer and Encoder")
+
+    def _encode_prompt(
+        self,
+        prompt: Union[str, List[str]],
+        device: Optional[torch.device] = None,
+        prompt_embeds: Optional[List[torch.FloatTensor]] = None,
+        max_sequence_length: int = 512,
+    ) -> List[torch.FloatTensor]:
+        device = device or self._execution_device
+
+        if prompt_embeds is not None:
+            return prompt_embeds
+
+        if isinstance(prompt, str):
+            prompt = [prompt]
+
+        for i, prompt_item in enumerate(prompt):
+            messages = [
+                {"role": "user", "content": prompt_item},
+            ]
+            prompt_item = self.tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=True,
+                enable_thinking=True,
+            )
+            prompt[i] = prompt_item
+
+        text_inputs = self.tokenizer(
+            prompt,
+            padding="max_length",
+            max_length=max_sequence_length,
+            truncation=True,
+            return_tensors="pt",
+        )
+
+        text_input_ids = text_inputs.input_ids.to(device)
+        prompt_masks = text_inputs.attention_mask.to(device).bool()
+
+        prompt_embeds = self.text_encoder(
+            input_ids=text_input_ids,
+            attention_mask=prompt_masks,
+            output_hidden_states=True,
+        ).hidden_states[-2]
+
+        embeddings_list = []
+
+        for i in range(len(prompt_embeds)):
+            embeddings_list.append(prompt_embeds[i][prompt_masks[i]])
+
+        return embeddings_list
+    
+    def encode_prompt(
+        self,
+        prompt: Union[str, List[str]],
+        device: Optional[torch.device] = None,
+        do_classifier_free_guidance: bool = False,
+        negative_prompt: Optional[Union[str, List[str]]] = None,
+        prompt_embeds: Optional[List[torch.FloatTensor]] = None,
+        negative_prompt_embeds: Optional[torch.FloatTensor] = None,
+        max_sequence_length: int = 512,
+    ):
+        prompt = [prompt] if isinstance(prompt, str) else prompt
+        prompt_embeds = self._encode_prompt(
+            prompt=prompt,
+            device=self.device,
+            prompt_embeds=prompt_embeds,
+            max_sequence_length=max_sequence_length,
+        )
+
+        if do_classifier_free_guidance:
+            if negative_prompt is None:
+                negative_prompt = ["" for _ in prompt]
+            else:
+                negative_prompt = [negative_prompt] if isinstance(negative_prompt, str) else negative_prompt
+            assert len(prompt) == len(negative_prompt)
+            negative_prompt_embeds = self._encode_prompt(
+                prompt=negative_prompt,
+                device=self.device,
+                prompt_embeds=negative_prompt_embeds,
+                max_sequence_length=max_sequence_length,
+            )
+        else:
+            negative_prompt_embeds = []
+        return prompt_embeds, negative_prompt_embeds
+
+    # def on_training_start(self):
+    #     # Build ema state dict
+    #     logger.info(f"Creating EMA handler, Use EMA = {self.config.use_ema}, EMA decay = {self.config.ema_decay}")
+    #     if self.config.resume_from_checkpoint is not None and self.config.resume_ema:
+    #         ema_resume_pth = os.path.join(self.config.resume_from_checkpoint, "ema_state_dict.pth")
+    #     else:
+    #         ema_resume_pth = None
+    #     self.ema_handler = EMAModel(
+    #         self.unwrap_model(self.G),
+    #         decay=self.config.ema_decay,
+    #         use_ema=self.config.use_ema,
+    #         ema_resume_pth=ema_resume_pth,
+    #         verbose=self.accelerator.is_local_main_process,
+    #     )
+
+    #     global_step = 0
+    #     if self.config.resume_from_checkpoint:
+    #         path = self.config.resume_from_checkpoint
+    #         ckpt_name = os.path.basename(path)
+    #         logger.info(f"Resuming from checkpoint {path}")
+    #         accel_state_path = os.path.join(path, "model.safetensors")
+    #         if os.path.exists(accel_state_path) and not getattr(self.config, "load_minimal_checkpoint", False):
+    #             # Full state exists (non-minimal): resume via accelerator
+    #             self.force_optimizer_ckpt_safe(path)
+                
+    #             # === 替换开始: 手动加载并转换精度 (bf16 -> fp32) ===
+    #             logger.info(f"Manual loading from {path} with bf16->fp32 cast")
+                
+    #             # 1. 加载 Generator (来自 state_dict.pth)
+    #             g_path = os.path.join(path, "state_dict.pth")
+    #             if os.path.exists(g_path):
+    #                 logger.info(f"Loading Generator from {g_path}")
+    #                 g_state = torch.load(g_path, map_location="cpu", weights_only=True)
+    #                 # 强制转换为 float32
+    #                 g_state = {k: v.float() for k, v in g_state.items()}
+    #                 self.unwrap_model(self.G).load_state_dict(g_state, strict=False)
+                
+    #             # 2. 加载 Discriminator (来自 model.safetensors)
+    #             d_path = os.path.join(path, "model.safetensors")
+    #             if os.path.exists(d_path) and hasattr(self, "D") and self.D is not None:
+    #                 logger.info(f"Loading Discriminator from {d_path}")
+    #                 from safetensors.torch import load_file
+    #                 d_state = load_file(d_path, device="cpu")
+    #                 # 强制转换为 float32
+    #                 d_state = {k: v.float() for k, v in d_state.items()}
+    #                 self.unwrap_model(self.D).load_state_dict(d_state)
+
+    #             # 3. 加载优化器 (optimizer.bin -> G_opt, optimizer_1.bin -> D_opt)
+    #             # 注意：跨精度加载优化器状态有风险，必须转换 state 中的 Tensor
+                
+    #             # 辅助函数：转换优化器状态精度
+    #             def load_and_cast_optimizer(opt, opt_path):
+    #                 if not os.path.exists(opt_path): return
+    #                 logger.info(f"Loading Optimizer from {opt_path}")
+    #                 opt_state = torch.load(opt_path, map_location="cpu", weights_only=False)
+                    
+    #                 # 递归遍历 state 字典，将所有 Tensor 转为 float32
+    #                 for param_id, param_state in opt_state['state'].items():
+    #                     for k, v in param_state.items():
+    #                         if isinstance(v, torch.Tensor):
+    #                             param_state[k] = v.float()
+                                
+    #                 opt.load_state_dict(opt_state)
+
+    #             # 假设 G_opt 是第一个被 prepare 的，对应 optimizer.bin
+    #             if hasattr(self, "G_opt"):
+    #                 load_and_cast_optimizer(self.G_opt, os.path.join(path, "optimizer.bin"))
+                
+    #             # 假设 D_opt 是第二个被 prepare 的，对应 optimizer_1.bin
+    #             if hasattr(self, "D_opt") and hasattr(self, "D") and self.D is not None:
+    #                 load_and_cast_optimizer(self.D_opt, os.path.join(path, "optimizer_1.bin"))
+
+    #         else:
+    #             # Minimal checkpoint: load LoRA/trainable weights only
+    #             self._load_minimal_checkpoint(path)
+    #         global_step = int(ckpt_name.split("-")[1])
+    #         init_global_step = global_step
+    #     else:
+    #         init_global_step = 0
+
+    #     self.global_step = global_step
+    #     self.pbar = tqdm(
+    #         range(0, self.config.max_train_steps),
+    #         initial=init_global_step,
+    #         desc="Steps",
+    #         disable=not self.accelerator.is_main_process,
+    #     )
+
+    def attach_accelerator_hooks(self):
+        def save_model_hook(models, weights, output_dir):
+            if self.accelerator.is_main_process:
+                model = models[0]
+                weights.pop(0)
+                model = self.unwrap_model(model)
+                assert isinstance(model, ZImageTransformer2DModel) or hasattr(model, "base_model")
+                state_dict = {
+                    name: param.detach().cpu()
+                    for name, param in model.named_parameters()
+                    if param.requires_grad
+                }
+                torch.save(state_dict, os.path.join(output_dir, "state_dict.pth"))
+
+        def load_model_hook(models, input_dir):
+            model = models.pop(0)
+            model = self.unwrap_model(model)
+            assert isinstance(model, ZImageTransformer2DModel) or hasattr(model, "base_model")
+            state_dict = torch.load(os.path.join(input_dir, "state_dict.pth"), map_location="cpu")
+            load_result = model.load_state_dict(state_dict, strict=False)
+            missing = getattr(load_result, "missing_keys", [])
+            unexpected = getattr(load_result, "unexpected_keys", [])
+            trainable_keys = set(n for n, p in model.named_parameters() if p.requires_grad)
+            real_missing = [k for k in missing if k in trainable_keys]
+
+            if real_missing:
+                logger.info(f"LoRA missing keys (trainable parameters that failed to load): {real_missing}")
+            elif missing:
+                logger.info(f"Successfully loaded LoRA weights. Ignored {len(missing)} missing keys for frozen base model parameters.")
+
+            if unexpected:
+                logger.info(f"LoRA unexpected keys: {unexpected}")
+
+        self.accelerator.register_save_state_pre_hook(save_model_hook)
+        self.accelerator.register_load_state_pre_hook(load_model_hook)
+
+    def _set_byt5_precision(self, dtype: torch.dtype):
+        base_model = self.G
+        # unwrap Peft or DDP wrappers to reach underlying module
+        if hasattr(base_model, "get_base_model"):
+            base_model = base_model.get_base_model()
+        if hasattr(base_model, "module"):
+            base_model = base_model.module
+        byt5_module = getattr(base_model, "byt5_in", None)
+        if byt5_module is None:
+            logger.warning("ByT5 module not found; skip precision adjustment")
+            return
+        byt5_module.to(device=self.device, dtype=dtype)
+        # ensure LayerNorm params stay in desired dtype
+        if hasattr(byt5_module, "layernorm"):
+            byt5_module.layernorm.to(dtype=dtype)
+        for param in byt5_module.parameters():
+            param.requires_grad = False
+
+    def _denoise_step(self, latents, timesteps, prompt_embeds, timesteps_r=None):
+        """
+        Perform one denoising step.
+
+        Args:
+            latents: Latent tensor
+            timesteps: Timesteps tensor
+            text_emb: Text embedding
+            text_mask: Text mask
+            byt5_emb: byT5 embedding
+            byt5_mask: byT5 mask
+            guidance_scale: Guidance scale
+            timesteps_r: Optional next timestep
+
+        Returns:
+            Noise prediction tensor
+        """
+        latent_model_input = latents.to(device=self.device, dtype=self.weight_dtype)
+        timestep_model_input = timesteps.to(device=self.device)
+        prompt_embeds_model_input = [embeds.to(device=self.device, dtype=self.weight_dtype) for embeds in prompt_embeds]
+
+        latent_model_input = latent_model_input.unsqueeze(2)
+        latent_model_input_list = list(latent_model_input.unbind(dim=0))
+        if getattr(self, "accelerator", None) is None or self.accelerator.is_local_main_process:
+            base_model = self.G.module if hasattr(self.G, "module") else self.G
+
+        guidance_expand = None
+        
+        noise_pred, zs = self.G(
+            latent_model_input_list,
+            timestep_model_input,
+            prompt_embeds_model_input,
+        )
+        
+        return noise_pred, zs
+    
+    def forward_generator(self):
+        t_expand = (1000 - self.batch_inputs.timesteps) / 1000
+        sigmas = torch.tensor([self.config.coeff_t / 1000.0, 0]).to(dtype=torch.float32, device=self.device)
+        latent_model_input = self.batch_inputs.z_lq
+        model_out_list, zs = self._denoise_step(
+            latent_model_input, t_expand, 
+            self.c_txt["prompt_embeds"],
+            timesteps_r=None
+        )
+        noise_pred = torch.stack([t.float() for t in model_out_list], dim=0)
+        noise_pred = noise_pred.squeeze(2)
+        noise_pred = -noise_pred
+        # noise_pred = -noise_pred
+        # print_vram_state("After _denoise_step (G forward)", logger=logger)
+        latents = self.step(latent_model_input, noise_pred, sigmas, 0)
+
+        # If we are training in latent space, return latents directly
+        if not getattr(self.config, "use_vae", True):
+            return latents
+        
+        x = self._decode_latents(latents.to(self.weight_dtype)).float()
+        return x, latents, zs
+
+    def _decode_latents(self, latents: torch.Tensor) -> torch.Tensor:
+        if hasattr(self.vae.config, "shift_factor") and self.vae.config.shift_factor:
+            latents = latents / self.vae.config.scaling_factor + self.vae.config.shift_factor
+        else:
+            latents = latents / self.vae.config.scaling_factor
+
+        latents = latents.to(dtype=self.weight_dtype).contiguous()
+        image = self.vae.decode(latents, return_dict=False)[0]
+        
+        if getattr(self.config, "use_refiner", False):
+            image = self.refiner(image)
+        return image
+    

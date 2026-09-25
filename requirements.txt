@@ -1,0 +1,16 @@
+accelerate>=0.30
+diffusers>=0.30
+transformers>=4.40
+peft>=0.10
+omegaconf>=2.3
+safetensors>=0.4
+Pillow>=10
+numpy>=1.24
+opencv-python>=4.8
+polars>=0.20
+scipy>=1.10
+tqdm>=4.66
+lpips>=0.1
+pyiqa>=0.1
+einops>=0.7
+huggingface_hub>=0.24

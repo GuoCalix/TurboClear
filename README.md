@@ -44,14 +44,77 @@
 
 TurboClear addresses the spatial asymmetry of object-effect removal: regions influenced by the target object should be regenerated, while the remaining image should stay unchanged. RDM provides region-aware supervision during one-step distillation, and LSF learns spatial gates for lightweight fusion at inference time.
 
-## Release Status
+## Code layout
 
-| Resource | Status |
-| --- | --- |
-| Paper | [arXiv:2608.01288](https://arxiv.org/abs/2608.01288) |
-| Model weights | TBD |
-| Code | TBD |
-| Usage guide | TBD |
+This first public release keeps the three experiment stages separate:
+
+- `inference/`: one-step inference and learnable fusion, based on
+  `inference/inference_turboclear.sh` from the research repository.
+- `training/`: masked-effect DMD one-step training, based on
+  `train_dmd_1step_masked_effect.sh`.
+- `post_training/`: frozen-generator learnable fusion training, based on
+  `train_objectclear_fusion_1step.sh`.
+
+The training and post-training code use the OBER dataset and an ObjectClear/SDXL
+base model. The dataset and base model are not included in this repository.
+
+## Installation
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+Install a CUDA-compatible PyTorch build before installing the remaining
+dependencies when the default PyPI wheel does not match your system.
+
+## Inference
+
+Set the input, mask, base-model, student-checkpoint, and fusion-checkpoint
+paths, then run:
+
+```bash
+INPUT_DIR=/path/to/images \
+MASK_DIR=/path/to/masks \
+BASE_MODEL_PATH=/path/to/ObjectClear \
+WEIGHT_PATH=/path/to/checkpoint-25000-sdxl \
+FUSION_MODULE_PATH=/path/to/fusion_module.pth \
+bash inference/inference_turboclear.sh
+```
+
+The student checkpoint directory must contain `state_dict.pth`. The fusion
+checkpoint can be either `fusion_module.pth` or its containing directory.
+
+## Training
+
+Configure the environment variables below, or edit the YAML configuration:
+
+```bash
+export TURBOCLEAR_DATASET_PATH=/path/to/OBER/data
+export TURBOCLEAR_VALIDATION_DATASET_PATH=/path/to/OBER-Test
+export TURBOCLEAR_BASE_MODEL_PATH=/path/to/ObjectClear
+export TURBOCLEAR_GENERATOR_CHECKPOINT=/path/to/pretrained/student/checkpoint
+export TURBOCLEAR_OUTPUT_DIR=./outputs/dmd
+bash training/train_dmd_1step_masked_effect.sh
+```
+
+The fusion post-training stage uses the same dataset and base model variables,
+and additionally reads `TURBOCLEAR_FUSION_CHECKPOINT` when resuming:
+
+```bash
+export TURBOCLEAR_OUTPUT_DIR=./outputs/fusion
+bash post_training/train_objectclear_fusion_1step.sh
+```
+
+Both scripts use `accelerate`; adjust the GPU count and accelerator config for
+your machine.
+
+## Release status
+
+The source code is available in this repository. Model files are released
+separately through the Hugging Face model card and must be downloaded before
+running inference. OBER images and masks are not redistributed here.
 
 ## Citation
 

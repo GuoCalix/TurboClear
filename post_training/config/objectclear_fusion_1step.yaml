@@ -1,0 +1,116 @@
+output_dir: ${oc.env:TURBOCLEAR_OUTPUT_DIR,./outputs/fusion_1step}
+
+batch_size: 2
+dataloader_num_workers: 4
+pin_memory: true
+prefetch_factor: 2
+persistent_workers: false
+dataset_path: ${oc.env:TURBOCLEAR_DATASET_PATH,./data/OBER/data}
+validation_dataset_path: ${oc.env:TURBOCLEAR_VALIDATION_DATASET_PATH,./data/OBER/Test/OBER-Test}
+prompt: "remove the instance of object"
+validation_prompt: "remove the instance of object"
+input_size: 512
+
+# Validation settings
+validation_input_size: 512
+validation_batch_size: 1
+validation_num_workers: 2
+validation_steps: 500
+validation_max_batches: -1
+validation_max_samples: 200
+validation_save_batches: 20
+validation_image_dir: ${output_dir}/validation/images
+validation_metrics_csv: ${output_dir}/validation/metrics.csv
+
+base_model_type: objectclear_fusion
+base_model_path: ${oc.env:TURBOCLEAR_BASE_MODEL_PATH,jixin0101/ObjectClear}
+# Frozen one-step generator checkpoint. Replace this with the target trained 1-step checkpoint.
+generator_checkpoint_path: ${oc.env:TURBOCLEAR_GENERATOR_CHECKPOINT,}
+fusion_checkpoint_path: ${oc.env:TURBOCLEAR_FUSION_CHECKPOINT,}
+strict_lora_load: false
+cache_dir: ~
+cache_prompt_embeds_on_gpu: true
+
+lora_rank: 256
+lora_modules: ["to_q","to_k","to_v","to_out.0","proj_in","proj_out","ff.net.0.proj","ff.net.2","conv1","conv2","conv_shortcut","downsamplers.0.conv","upsamplers.0.conv","time_emb_proj"]
+
+student_steps: 1
+scheduler_type: ddim
+scheduler_timestep_spacing: fixed
+noise_timestep: 399
+generator_timestep: 399
+
+# Learnable attention fusion head
+fusion_latent_channels: 4
+fusion_hidden_channels: 32
+fusion_num_layers: 3
+fusion_logit_eps: 0.0001
+fusion_input_mask: object  # Do not feed effect/shadow mask to fusion head; it is supervision only.
+fusion_bg_target: gt
+
+# Pixel reconstruction losses
+lambda_fusion_mask_l1: 1.0
+lambda_fusion_bg_l1: 0.5
+lambda_fusion_lpips: 0.2
+
+# Alpha regularization. The foreground term keeps alpha high inside eroded effect mask;
+# the background term suppresses alpha outside dilated effect mask; TV keeps alpha smooth.
+lambda_alpha_fg: 0.05
+lambda_alpha_bg: 0.05
+lambda_alpha_tv: 0.01
+lambda_alpha_prior: 0.0
+alpha_fg_erode: 8
+alpha_bg_dilate: 16
+
+# Frozen-generator attention monitor and normalized attention prior
+object_localization: true
+object_localization_weight: 0.0
+object_localization_threshold: 0.1
+background_loss_weight: 1.0
+attn_loss_layers: 5
+fuse_index: 5
+model_t: 0
+
+lr_fusion: 1e-4
+optimizer_type: adam
+opt_kwargs:
+  betas: [0.9, 0.999]
+
+mixed_precision: bf16
+accelerator_mixed_precision: bf16
+weight_dtype: bf16
+text_encoder_dtype: fp32
+object_encoder_dtype: fp32
+postfuse_dtype: fp32
+sync_conditioning_modules_from_rank0: true
+seed: 666
+max_train_steps: 20000
+gradient_accumulation_steps: 1
+gradient_checkpointing: false
+vae_decode_checkpointing: true
+max_grad_norm: 1.0
+logging_dir: logs
+report_to: tensorboard
+wandb_project: FlashClear
+wandb_run_name: objectclear-fusion-1step
+checkpointing_steps: 500
+checkpoints_total_limit: 2
+resume_from_checkpoint: ~
+log_image_steps: 200
+
+use_ema: false
+ema_decay: 0.999
+resume_ema: false
+use_vae: true
+use_D: false
+use_D_sdxl: false
+use_blended_image: false
+
+use_blank_mask: false
+blank_mask_prob: 0.0
+color_augmentation: false
+flip_augmentation: true
+rotation_augmentation: false
+rotation_prob: 0.5
+random_mask_dilation: true
+random_mask_erosion: true

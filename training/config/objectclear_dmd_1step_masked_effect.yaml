@@ -1,0 +1,173 @@
+output_dir: ${oc.env:TURBOCLEAR_OUTPUT_DIR,./outputs/dmd_1step_masked_effect}
+
+batch_size: 2
+dataloader_num_workers: 4
+pin_memory: true
+prefetch_factor: 2
+persistent_workers: false
+dataset_path: ${oc.env:TURBOCLEAR_DATASET_PATH,./data/OBER/data}
+validation_dataset_path: ${oc.env:TURBOCLEAR_VALIDATION_DATASET_PATH,./data/OBER/Test/OBER-Test}
+prompt: "remove the instance of object"
+validation_prompt: "remove the instance of object"
+input_size: 512
+
+# Validation settings
+validation_input_size: 512
+validation_batch_size: 1
+validation_num_workers: 2
+validation_steps: 500
+validation_max_batches: -1
+validation_max_samples: 200
+validation_save_batches: 20
+validation_image_dir: ${output_dir}/validation/images
+validation_metrics_csv: ${output_dir}/validation/metrics.csv
+
+base_model_type: objectclear_dmd
+base_model_path: ${oc.env:TURBOCLEAR_BASE_MODEL_PATH,jixin0101/ObjectClear}
+generator_checkpoint_path: ${oc.env:TURBOCLEAR_GENERATOR_CHECKPOINT,}
+teacher_checkpoint_path: ~
+strict_lora_load: false
+cache_dir: ~
+cache_prompt_embeds_on_gpu: true
+
+use_FFT: true
+fft_trainable_unet_fp32: true
+unet_forward_autocast: true
+fft_merged_model_dir: ${output_dir}/checkpoint-0
+fft_merge_overwrite: false
+fft_merge_strict: true
+fft_merge_scale: ~
+fft_merge_save_dtype: fp32
+fft_merge_max_shard_size: 5GB
+fft_merge_safe_serialization: true
+fft_merge_link_base_components: true
+fft_merge_copy_base_components: false
+
+lora_rank: 256
+lora_modules: ["to_q","to_k","to_v","to_out.0","proj_in","proj_out","ff.net.0.proj","ff.net.2","conv1","conv2","conv_shortcut","downsamplers.0.conv","upsamplers.0.conv","time_emb_proj"]
+
+student_steps: 1
+scheduler_type: ddim
+scheduler_timestep_spacing: fixed
+noise_timestep: 399
+generator_timestep: 399
+latent_background_copy: false
+
+# dmd parameters
+use_DMD: true
+dmd_region_mode: masked
+dmd_mask_source: effect_mask
+dmd_mask_dilate: 2
+dmd_mask_blur: 1
+dmd_mask_normalize: true
+dmd_masked_grad: true
+dmd_loss_normalize_by_mask: true
+dmd_min_timestep: 20
+dmd_max_timestep: 980
+dmd_timestep_strategy: random
+dmd_timesteps: [250, 500, 750]
+dmd_fixed_timestep: 399
+fake_min_timestep: 0
+fake_max_timestep: 999
+lambda_dmd: 0.1
+dmd_grad_norm_type: real_abs_mean
+real_CFG: 1.0
+fake_CFG: 1.0
+fake_update_ratio: 5
+fake_loss_weight: 1.0
+use_gan: false
+guidance_cls_loss_weight: 1e-2
+gen_cls_loss_weight: 1e-2
+gan_diffusion: true
+gan_diffusion_max_timestep: 1000
+gan_start_step: 0
+gen_gan_start_step: 200
+
+# latent losses
+lambda_gt_latent: 0.0
+lambda_l2_latent: 0.0
+
+# pixel losses
+lambda_l2: 0.0
+lambda_mask_l1: 0.1
+lambda_mask_background: 0.1
+lambda_teacher_image_l1: 0.0
+lambda_lpips_gt: 1.0
+local_lpips: false
+local_lpips_padding_pixels: 32
+lambda_diffusion: 0.0
+object_localization: true
+object_localization_weight: 0.01
+object_localization_threshold: 0.1
+background_loss_weight: 1.0
+apply_attention_guided_fusion: false
+apply_attention_guided_fusion_in_validation: true
+teacher_apply_attention_guided_fusion: false
+fuse_index: 5
+model_t: 0
+coeff_t: 0
+
+# ADD GAN parameters
+use_external_D: false
+use_D: false
+use_D_sdxl: false
+lambda_gan: 0.1
+lambda_D: 1.0
+
+lr_G: 5e-7
+lr_fake: 5e-7
+lr_D: 2e-6
+optimizer_type: adam
+opt_kwargs:
+  betas: [0.9, 0.999]
+
+mixed_precision: bf16
+accelerator_mixed_precision: "no"
+weight_dtype: bf16
+text_encoder_dtype: fp32
+object_encoder_dtype: fp32
+postfuse_dtype: fp32
+sync_conditioning_modules_from_rank0: true
+seed: 666
+max_train_steps: 100000
+gradient_accumulation_steps: 1
+gradient_checkpointing: false
+vae_decode_checkpointing: true
+max_grad_norm: 1.0
+logging_dir: logs
+report_to: tensorboard
+wandb_project: FlashClear
+wandb_run_name: objectclear-dmd-1step-masked-effect
+checkpointing_steps: 500
+checkpoints_total_limit: 2
+resume_from_checkpoint: ~
+resume_allow_partial_optimizer: true
+resume_model_only: true
+log_image_steps: 200
+log_grad_steps: 100
+log_grad_modules: [conv_out]
+log_grads: false
+
+debug_save_every_step: true
+debug_image_dir: ${output_dir}/debug_generator_steps
+debug_max_saved_steps: 10
+debug_save_all_samples: true
+debug_save_all_processes: true
+debug_save_attention_map: true
+debug_fake_weight_probe: true
+debug_fake_weight_probe_tensors: 16
+
+use_ema: false
+ema_decay: 0.999
+resume_ema: false
+use_vae: true
+use_blended_image: false
+
+use_blank_mask: false
+blank_mask_prob: 0.0
+color_augmentation: false
+flip_augmentation: true
+rotation_augmentation: false
+rotation_prob: 0.5
+random_mask_dilation: true
+random_mask_erosion: true
