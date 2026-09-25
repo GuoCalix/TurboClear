@@ -6,6 +6,7 @@ tags:
   - object-removal
   - sdxl
   - one-step-diffusion
+license: apache-2.0
 ---
 
 # TurboClear weights

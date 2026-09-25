@@ -116,6 +116,11 @@ The source code is available in this repository. Model files are released
 separately through the Hugging Face model card and must be downloaded before
 running inference. OBER images and masks are not redistributed here.
 
+## License
+
+The TurboClear source code is released under the [Apache License 2.0](LICENSE).
+Third-party components and pretrained models retain their respective licenses.
+
 ## Citation
 
 ```bibtex
@@ -129,4 +134,6 @@ running inference. OBER images and masks are not redistributed here.
 
 ## Acknowledgements
 
-TBD
+TurboClear was inspired by [ObjectClear](https://github.com/jixin0101/ObjectClear)
+and [DMD2](https://github.com/tianweiy/DMD2). We thank the authors for their
+open-source implementations and research contributions.
