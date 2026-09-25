@@ -48,8 +48,8 @@ TurboClear addresses the spatial asymmetry of object-effect removal: regions inf
 
 This first public release keeps the three experiment stages separate:
 
-- `inference/`: one-step inference and learnable fusion, based on
-  `inference/inference_turboclear.sh` from the research repository.
+- `inference/`: one-step inference and learnable fusion, launched via
+  `inference/inference_turboclear.sh`.
 - `training/`: masked-effect DMD one-step training, based on
   `train_dmd_1step_masked_effect.sh`.
 - `post_training/`: frozen-generator learnable fusion training, based on

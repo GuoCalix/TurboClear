@@ -27,10 +27,7 @@ from HYPIR.model.fusion_module import LearnableAttentionFusion
 from HYPIR.model.postfuse_module import PostfuseModule
 from HYPIR.utils.attention_guided_fusion import attention_guided_fusion
 
-import sys
 import time
-from toca_patch import patch_module, toca_cache_dic, ToCaConfig
-from fusion_prune_patch import patch_fusion_prune, fusion_prune_cache, FusionPruneConfig
 
 FLOP_BUCKET_KEYS = (
     "condition_encode",
@@ -1596,21 +1593,7 @@ class ObjectClearValInfer:
                 self._logged_fusion_validation_mode = True
             return self.forward_learnable_fusion_validation()
 
-        toca_cache_dic['cache'].clear()
-        toca_cache_dic['attn_score1'].clear()
-        toca_cache_dic['attn_score2'].clear()
-        toca_cache_dic['cache_counter'].clear()
-        toca_cache_dic['step'] = 0
-        toca_cache_dic['total_steps'] = getattr(self.config, "distill_steps", 4)
-        fusion_prune_cache['step'] = 0
-        fusion_prune_cache['block_cache'].clear()
-        fusion_prune_cache['masks'].clear()
-        fusion_prune_cache['fg_indices'].clear()
-        fusion_prune_cache['N_fg'].clear()
-        fusion_prune_cache.pop('db1_hw', None)
         z = self.batch_inputs.z_lq
-        # Store latent spatial dims for non-square support in pruning/AGF
-        fusion_prune_cache['latent_hw'] = (z.shape[-2], z.shape[-1])
         image_latents = self.batch_inputs.masked_image_latents
         noise = torch.randn_like(image_latents)
         mask = self.batch_inputs.mask_latent.to(dtype=z.dtype)
@@ -1634,8 +1617,6 @@ class ObjectClearValInfer:
         loop_start_time = time.time()
 
         for i, t in enumerate(timesteps):
-            toca_cache_dic['step'] = i
-            fusion_prune_cache['step'] = i
             t_batch = torch.full((z.shape[0],), int(t), dtype=torch.long, device=self.device)
             z_model = self.scheduler.scale_model_input(z, t)
             if self.G.config.in_channels == 9:
@@ -2038,16 +2019,6 @@ def parse_args():
         help="Backbone for LPIPS metric",
     )
     
-    parser.add_argument("--cache_sa", type=str, default="", help="Comma-separated steps to cache Self-Attention (e.g. 2,4)")
-    parser.add_argument("--cache_ca", type=str, default="", help="Comma-separated steps to cache Cross-Attention (e.g. 2,4)")
-    parser.add_argument("--cache_mlp", type=str, default="", help="Comma-separated steps to cache MLP (e.g. 2,4)")
-    parser.add_argument("--cache_cnn", type=str, default="", help="Comma-separated steps to cache CNN (e.g. 2,4)")
-    parser.add_argument("--toca_cache_ratio", type=float, default=0.0, help="Ratio of tokens to cache (0.0 to 1.0).")
-    parser.add_argument("--fusion_prune", action="store_true", help="Enable fusion-guided token pruning in Down Block 1")
-    parser.add_argument("--fusion_prune_threshold", type=float, default=0.5, help="Attention map binarization threshold")
-    parser.add_argument("--fusion_prune_dilate", type=int, default=3, help="Dilation kernel size at token resolution")
-    parser.add_argument("--fusion_prune_blocks", type=str, default="all", help="Which blocks to prune: all, db1, db1+ub1, db2+mid+ub0, etc.")
-    parser.add_argument("--fusion_prune_last_n", type=int, default=1, help="How many final steps to prune (default=1 = only last step)")
     parser.add_argument("--profile_flops", action="store_true", help="Profile theoretical FLOPs for the removal pipeline")
     return parser.parse_args()
 
@@ -2233,38 +2204,10 @@ def main():
         profiler.register_model(model.vae)
         profiler.register_model(model.G)
         model.flops_profiler = profiler
-        fusion_prune_cache['flops_profiler'] = profiler
         print("[Profiler] Enabled theoretical FLOPs for removal pipeline: "
               "Condition Encode + Removal VAE Encode + Transformer + VAE Decode")
     else:
-        fusion_prune_cache['flops_profiler'] = None
-
-    def parse_int_list(s: str):
-        if not s: return []
-        return [int(x.strip()) for x in s.split(",") if x.strip().isdigit()]
-
-    if args.fusion_prune:
-        fp_config = FusionPruneConfig()
-        fp_config.threshold = args.fusion_prune_threshold
-        fp_config.dilate_kernel = args.fusion_prune_dilate
-        fp_config.fuse_index = getattr(runtime_cfg, 'fuse_index', 5)
-        fp_config.blocks = args.fusion_prune_blocks
-        fp_config.prune_last_n = args.fusion_prune_last_n
-        fusion_prune_cache['total_steps'] = getattr(runtime_cfg, 'distill_steps', 4)
-        patch_fusion_prune(model.G, fp_config, model.cross_attention_scores)
-        print(f"[FusionPrune] Enabled: threshold={fp_config.threshold}, dilate={fp_config.dilate_kernel}, blocks={fp_config.blocks}")
-    elif args.cache_sa or args.cache_ca or args.cache_mlp or args.cache_cnn:
-        toca_config = ToCaConfig()
-        toca_config.cache_sa_steps = parse_int_list(args.cache_sa)
-        toca_config.cache_ca_steps = parse_int_list(args.cache_ca)
-        toca_config.cache_mlp_steps = parse_int_list(args.cache_mlp)
-        toca_config.cache_cnn_steps = parse_int_list(args.cache_cnn)
-        toca_config.cache_ratio = args.toca_cache_ratio
-        toca_cache_dic['config'] = toca_config
-        patch_module(model.G, "unet", toca_config)
-        print(f"[ToCa] Applied Token Caching with SA={toca_config.cache_sa_steps}, CA={toca_config.cache_ca_steps}, MLP={toca_config.cache_mlp_steps}, CNN={toca_config.cache_cnn_steps}, ratio={args.toca_cache_ratio}")
-    else:
-        print("[ToCa/FusionPrune] Disabled.")
+        model.flops_profiler = None
 
     if args.input_dir and args.mask_dir:
         dataset = DirectoryInpaintDataset(
@@ -2348,11 +2291,11 @@ def main():
     for batch in pbar:
         with torch.no_grad():
             with torch.autocast(device_type="cuda", dtype=amp_dtype, enabled=amp_enabled and not strict_fusion_validation):
-                should_measure_flops = args.profile_flops and (args.fusion_prune or cached_flops is None)
+                should_measure_flops = args.profile_flops and cached_flops is None
                 if args.profile_flops:
                     model.flops_profiler.reset_totals()
                     model.flops_profiler.set_enabled(should_measure_flops)
-                    if should_measure_flops and not args.fusion_prune and cached_flops is None:
+                    if should_measure_flops and cached_flops is None:
                         print("\n[Profiler] Measuring theoretical FLOPs on the first removal batch...")
 
                 model.prepare_batch_inputs(batch)
@@ -2362,7 +2305,7 @@ def main():
             if should_measure_flops:
                 current_flops = model.flops_profiler.get_totals()
                 batch_flops = {k: float(v) / pred.shape[0] for k, v in current_flops.items()}
-                if not args.fusion_prune and cached_flops is None:
+                if cached_flops is None:
                     cached_flops = dict(batch_flops)
             else:
                 batch_flops = dict(cached_flops)
