@@ -31,9 +31,8 @@ def main() -> None:
     args = parse_args()
     root = Path(args.weights_root).expanduser().resolve()
     student = root / "checkpoint-25000-sdxl" / "state_dict.pth"
-    fake = root / "checkpoint-25000-sdxl" / "fake_state_dict.pth"
     fusion = root / "checkpoint-7000-fusion" / "fusion_module.pth"
-    for path in (student, fake, fusion):
+    for path in (student, fusion):
         if not path.is_file():
             raise FileNotFoundError(path)
 
@@ -51,14 +50,6 @@ def main() -> None:
     api.upload_file(
         path_or_fileobj=str(student),
         path_in_repo="sdxl/state_dict.pth",
-        repo_id=args.repo_id,
-        repo_type="model",
-        revision=args.revision,
-        token=args.token,
-    )
-    api.upload_file(
-        path_or_fileobj=str(fake),
-        path_in_repo="sdxl/fake_state_dict.pth",
         repo_id=args.repo_id,
         repo_type="model",
         revision=args.revision,

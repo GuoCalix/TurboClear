@@ -17,7 +17,6 @@ public inference code.
 ## Files
 
 - `sdxl/state_dict.pth`: one-step DMD student generator state.
-- `sdxl/fake_state_dict.pth`: fake score model state used by DMD training.
 - `fusion/fusion_module.pth`: learnable spatial fusion head trained after the
   generator.
 
