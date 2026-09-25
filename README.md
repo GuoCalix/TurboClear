@@ -23,7 +23,7 @@
 [![Project Page](https://img.shields.io/badge/Project-Page-24292f?style=flat-square&logo=googlechrome&logoColor=white)](https://guocalix.github.io/TurboClear/)
 [![Paper](https://img.shields.io/badge/Paper-arXiv-b31b1b?style=flat-square&logo=arxiv&logoColor=white)](https://arxiv.org/abs/2608.01288)
 [![PDF](https://img.shields.io/badge/PDF-Download-b31b1b?style=flat-square&logo=adobeacrobatreader&logoColor=white)](https://arxiv.org/pdf/2608.01288)
-![Model Weights](https://img.shields.io/badge/Model_Weights-TBD-8c8c8c?style=flat-square&logo=huggingface&logoColor=white)
+[![Model Weights](https://img.shields.io/badge/Model_Weights-Hugging_Face-ffcc4d?style=flat-square&logo=huggingface&logoColor=black)](https://huggingface.co/JGuo666/TurboClear)
 
 **TurboClear removes target objects and their associated visual effects with a single denoising step while preserving unaffected background regions.**
 
@@ -112,9 +112,9 @@ your machine.
 
 ## Release status
 
-The source code is available in this repository. Model files are released
-separately through the Hugging Face model card and must be downloaded before
-running inference. OBER images and masks are not redistributed here.
+The source code is available in this repository. Download the released model
+files from the [TurboClear Hugging Face repository](https://huggingface.co/JGuo666/TurboClear)
+before running inference. OBER images and masks are not redistributed here.
 
 ## License
 
