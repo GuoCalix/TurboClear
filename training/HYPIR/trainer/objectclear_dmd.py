@@ -25,13 +25,13 @@ from tqdm.auto import tqdm
 from HYPIR.dataset.sd_inpaint_dataset import SDInpaintImageDataset
 from HYPIR.trainer.objectclear import ObjectClearTrainer
 from HYPIR.utils.attention_guided_fusion import attention_guided_fusion
-from HYPIR.trainer.objectclear_lcm import (
+from HYPIR.dataset.ober import (
     OBERDirectoryDataset,
     extract_state_dict,
     normalize_state_dict_keys,
     resolve_state_file,
 )
-from HYPIR.trainer.objectclear_new import (
+from HYPIR.utils.objectclear_helpers import (
     BalancedL1Loss,
     clear_cross_attention_scores,
     get_object_localization_loss,

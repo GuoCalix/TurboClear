@@ -20,15 +20,13 @@ logger = get_logger(__name__, log_level="INFO")
 class ObjectClearTrainer(BaseTrainer):
 
     def init_models(self):
-        print(f"Use VAE: {self.config.use_vae}, Use D: {self.config.use_D}, Use EMA: {self.config.use_ema}")
+        print(f"Use VAE: {self.config.use_vae}, Use EMA: {self.config.use_ema}")
         self.init_scheduler()
         self.init_text_models()
         self.init_objectclear_modules()
         if self.config.use_vae:
             self.init_vae()
         self.init_generator()
-        if self.config.use_D:
-            self.init_discriminator()
         self.init_lpips()
 
     def _sync_module_from_rank0(self, module, name):

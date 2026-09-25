@@ -112,7 +112,7 @@ your machine.
 
 ## Release status
 
-The source code is available in this repository. Download the released model
+Applying Occam's razor, the core source code is kept simple and available in this repository. Download the released model
 files from the [TurboClear Hugging Face repository](https://huggingface.co/JGuo666/TurboClear)
 before running inference. OBER images and masks are not redistributed here.
 

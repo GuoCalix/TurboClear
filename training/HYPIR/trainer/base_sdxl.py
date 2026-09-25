@@ -7,7 +7,6 @@ from typing import overload, List, Dict
 import importlib
 import warnings
 import gc
-from contextlib import nullcontext
 
 import torch
 import torch.nn.functional as F
@@ -30,7 +29,7 @@ import diffusers
 from diffusers import AutoencoderKL
 from PIL import Image
 
-from HYPIR.utils.common import instantiate_from_config, log_txt_as_img, print_vram_state, SuppressLogging
+from HYPIR.utils.common import print_vram_state
 from HYPIR.utils.ema import EMAModel
 from HYPIR.utils.tabulate import tabulate
 from HYPIR.dataset.sd_inpaint_dataset import SDInpaintImageDataset
@@ -119,14 +118,6 @@ class BaseTrainer:
         model = self.accelerator.unwrap_model(model)
         return model
 
-    def init_models(self):
-        self.init_scheduler()
-        self.init_text_models()
-        self.init_vae()
-        self.init_generator()
-        self.init_discriminator()
-        self.init_lpips()
-
     @overload
     def init_scheduler(self):
         ...
@@ -154,26 +145,6 @@ class BaseTrainer:
     @overload
     def init_generator(self):
         ...
-
-    def init_discriminator(self):
-        # Suppress logs from open-clip
-        ctx = (
-            nullcontext()
-            if self.accelerator.is_local_main_process
-            else SuppressLogging(logging.WARNING)
-        )
-        with ctx:
-            if getattr(self.config, "use_D_sdxl", False):
-                from HYPIR.model.D_sdxl import SDXLInpaintDiscriminator
-
-                self.D = SDXLInpaintDiscriminator(
-                    model_id=self.config.base_model_path
-                ).to(device=self.device)
-            else:
-                from HYPIR.model.D import ImageConvNextDiscriminator
-
-                self.D = ImageConvNextDiscriminator(precision="bf16").to(device=self.device)
-        self.D.train().requires_grad_(True)
 
     def summary_models(self):
         table_data = []
