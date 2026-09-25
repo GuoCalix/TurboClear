@@ -50,9 +50,9 @@ This first public release keeps the three experiment stages separate:
 
 - `inference/`: one-step inference and learnable fusion, launched via
   `inference/inference_turboclear.sh`.
-- `training/`: masked-effect DMD one-step training, based on
+- `training/`: masked-effect DMD one-step training, launched via
   `train_dmd_1step_masked_effect.sh`.
-- `post_training/`: frozen-generator learnable fusion training, based on
+- `post_training/`: frozen-generator learnable fusion training, launched via
   `train_objectclear_fusion_1step.sh`.
 
 The training and post-training code use the OBER dataset and an ObjectClear/SDXL
