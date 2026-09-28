@@ -14,6 +14,11 @@ license: apache-2.0
 This repository contains the first TurboClear checkpoint release used by the
 public inference code.
 
+## Paper
+
+TurboClear: One-Step Object-Effect Removal via Region-Calibrated Distribution
+Matching and Fusion. [arXiv:2608.01288](https://arxiv.org/abs/2608.01288)
+
 ## Files
 
 - `sdxl/state_dict.pth`: one-step DMD student generator state.
