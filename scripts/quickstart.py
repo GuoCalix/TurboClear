@@ -30,6 +30,10 @@ def main():
     parser.add_argument("--mask-dir", type=Path, default=REPO_ROOT / "inputs/masks")
     parser.add_argument("--output-dir", type=Path, default=REPO_ROOT / "outputs/quickstart")
     parser.add_argument("--max-samples", type=int, default=-1, help="Default: all 12 examples.")
+    parser.add_argument("--resize-mode", choices=["square", "short_side", "pad_to_multiple"],
+                        default="square", help="Default: square (512x512 inference). Use pad_to_multiple for native resolution inference.")
+    parser.add_argument("--save-resize", choices=["original", "model"], default="original",
+                        help="Default: save at original image dimensions. Use model to save at inference dimensions.")
     args = parser.parse_args()
     for directory in (args.input_dir, args.mask_dir):
         if not directory.expanduser().is_dir():
@@ -46,6 +50,8 @@ def main():
         "MASK_DIR": str(args.mask_dir.expanduser().resolve()),
         "OUTPUT_DIR": str(args.output_dir.expanduser().resolve()),
         "MAX_SAMPLES": str(args.max_samples),
+        "RESIZE_MODE": args.resize_mode,
+        "SAVE_RESIZE": args.save_resize,
     })
     if args.local_files_only:
         env.update(HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1")

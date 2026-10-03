@@ -108,6 +108,21 @@ This checks CUDA/bfloat16 support, downloads the inference weights into
 Python interpreter. It does **not** download OBER. Predictions are written to
 `outputs/quickstart/pred/`, with timing in `outputs/quickstart/latency.csv`.
 The default pipeline uses one-step inference with Learnable Spatial Fusion (LSF).
+By default, inference runs at 512 × 512 and predictions are resized back to each
+original image's dimensions before saving. Use `--save-resize model` to save
+the 512 × 512 predictions instead.
+
+To run inference at the original resolution, padding to multiples of 8 and
+cropping away that padding before saving:
+
+```bash
+python scripts/quickstart.py --local-files-only --resize-mode pad_to_multiple
+```
+
+Native resolution inference uses more GPU memory for larger images. Alternatively,
+`--resize-mode short_side` preserves the aspect ratio with a target short side of
+512 pixels (dimensions aligned to multiples of 8), then restores the original
+dimensions when saving.
 
 Without activating the environment in your shell, use:
 

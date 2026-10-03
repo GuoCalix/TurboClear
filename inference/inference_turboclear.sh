@@ -18,6 +18,8 @@ MAX_SAMPLES="${MAX_SAMPLES:--1}"
 WARMUP_RUNS="${WARMUP_RUNS:-2}"
 TIMESTEP_SPACING="${TIMESTEP_SPACING:-fixed}"
 ALPHA_FUSION_THRESHOLD="${ALPHA_FUSION_THRESHOLD:-0.5}"
+RESIZE_MODE="${RESIZE_MODE:-square}"
+SAVE_RESIZE="${SAVE_RESIZE:-original}"
 
 EXTRA_ARGS=()
 if [[ "${TORCH_COMPILE:-0}" == "1" ]]; then
@@ -28,8 +30,8 @@ CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES}" "${PYTHON_BIN}" validate_objectcl
   --config configs/objectclear_train.yaml \
   --input_dir "${INPUT_DIR}" \
   --mask_dir "${MASK_DIR}" \
-  --resize_mode square \
-  --save_resize model \
+  --resize_mode "${RESIZE_MODE}" \
+  --save_resize "${SAVE_RESIZE}" \
   --base_model_path "${BASE_MODEL_PATH}" \
   --text_encoder_dtype fp32 \
   --object_encoder_dtype fp32 \
