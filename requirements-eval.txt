@@ -1,0 +1,3 @@
+# Optional full-image metrics in validate_objectclear.py (not used by quickstart).
+-r requirements.txt
+pyiqa==0.1.15.post2

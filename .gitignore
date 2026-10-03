@@ -9,6 +9,7 @@ data/
 datasets/
 pretrained/
 weights/
+model_weights/
 outputs/
 exps/
 logs/
@@ -24,3 +25,6 @@ checkpoint-*/
 *.pkl
 *.npy
 *.npz
+
+# Local research environment export; environment.yml is the portable recipe.
+/turboclear_environment.yml

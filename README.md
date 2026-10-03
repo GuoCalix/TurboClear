@@ -57,66 +57,195 @@ This first public release keeps the three experiment stages separate:
 - `post_training/`: frozen-generator learnable fusion training, launched via
   `train_objectclear_fusion_1step.sh`.
 
-The training and post-training code use the OBER dataset and an ObjectClear/SDXL
-base model. The dataset and base model are not included in this repository.
+The training and post-training code use the
+[OBER dataset](https://huggingface.co/datasets/sczhou/OBERDataset_ObjectClear)
+and an [ObjectClear/SDXL base model](https://huggingface.co/jixin0101/ObjectClear).
+The training dataset and base model are downloaded separately. This repository
+includes 12 [ObjectClear example image/mask pairs](inputs/README.md) for inference.
 
-## Installation
+## Installation (Conda)
+
+Use Linux with an NVIDIA CUDA GPU supporting bfloat16 and a driver compatible
+with CUDA 12.4. The default inference processes images at 512 × 512 with batch
+size 1. CPU and macOS inference are not supported by the supplied launcher.
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+git clone https://github.com/GuoCalix/TurboClear.git
+cd TurboClear
+conda env create -f environment.yml
+conda activate turboclear
+python -m pip check
 ```
 
-Install a CUDA-compatible PyTorch build before installing the remaining
-dependencies when the default PyPI wheel does not match your system.
+The portable [environment.yml](environment.yml) and pinned
+[requirements.txt](requirements.txt) are derived from the original research
+Conda environment:
 
-## Inference
+| Component | Version |
+| --- | --- |
+| Python | 3.10.20 |
+| PyTorch / torchvision | 2.5.1+cu124 / 0.20.1+cu124 |
+| CUDA wheel runtime | 12.4 |
+| Diffusers | 0.31.0 |
+| Transformers / Tokenizers | 4.41.0 / 0.19.1 |
+| Accelerate / PEFT | 1.13.0 / 0.10.0 |
+| Hugging Face Hub | 0.28.1 |
 
-Set the input, mask, base-model, student-checkpoint, and fusion-checkpoint
-paths, then run:
+Only the headless OpenCV package is installed, avoiding conflicting `cv2`
+packages. Full image-quality evaluation additionally requires
+`python -m pip install -r requirements-eval.txt`; quickstart does not use it.
+
+## Quickstart
+
+From the repository root, in the activated Conda environment:
 
 ```bash
-INPUT_DIR=/path/to/images \
-MASK_DIR=/path/to/masks \
-BASE_MODEL_PATH=/path/to/ObjectClear \
-WEIGHT_PATH=/path/to/checkpoint-25000-sdxl \
-FUSION_MODULE_PATH=/path/to/fusion_module.pth \
+python scripts/quickstart.py
+```
+
+This checks CUDA/bfloat16 support, downloads the inference weights into
+`./model_weights/`, and runs all 12 bundled image/mask pairs using the same
+Python interpreter. It does **not** download OBER. Predictions are written to
+`outputs/quickstart/pred/`, with timing in `outputs/quickstart/latency.csv`.
+The default pipeline uses one-step inference with Learnable Spatial Fusion (LSF).
+
+Without activating the environment in your shell, use:
+
+```bash
+conda run -n turboclear --no-capture-output python scripts/quickstart.py
+```
+
+For a single-image smoke test or a subsequent offline run:
+
+```bash
+python scripts/quickstart.py --max-samples 1
+python scripts/quickstart.py --local-files-only
+```
+
+Use your own paired images and masks by matching their filename stems. White
+mask pixels select the object to remove; extensions may differ between a pair.
+
+```bash
+python scripts/quickstart.py \
+  --input-dir /path/to/images --mask-dir /path/to/masks \
+  --output-dir /path/to/results
+```
+
+## Downloads
+
+Download weights without running inference:
+
+```bash
+python scripts/download_weights.py
+```
+
+The default destinations are anchored to the TurboClear repository directory,
+regardless of the current working directory:
+
+```text
+TurboClear/
+├── model_weights/
+│   ├── ObjectClear/                # Complete ObjectClear/SDXL inference components
+│   └── TurboClear/
+│       ├── sdxl/state_dict.pth      # One-step student
+│       └── fusion/fusion_module.pth
+├── datasets/                       # Created only when OBER is requested
+└── inputs/
+    ├── imgs/
+    └── masks/
+```
+
+The downloader pins Hugging Face revisions, fetches the required base-model
+components and the two released TurboClear checkpoints, and reuses completed
+files on repeated runs. The student checkpoint alone is approximately 10.3 GB;
+allow additional disk space for the ObjectClear base model. No separate SDXL
+repository download is needed. Inference does not need `fake_state_dict.pth`.
+
+To choose another model directory, pass the same option to both commands:
+
+```bash
+python scripts/download_weights.py --weights-dir /path/to/model_weights
+python scripts/quickstart.py --weights-dir /path/to/model_weights
+```
+
+Alternatively, `--cache-dir /path/to/huggingface/hub` uses Hugging Face's snapshot
+cache layout instead of the local model directory. `--cache-dir` and
+`--weights-dir` are mutually exclusive. `--local-files-only` verifies existing
+files and avoids network access.
+
+OBER is large and is **opt-in**, for training/post-training only:
+
+```bash
+python scripts/download_weights.py --with-dataset
+# Optional custom destinations:
+python scripts/download_weights.py --with-dataset \
+  --weights-dir /path/to/model_weights --datasets-dir /path/to/datasets
+```
+
+By default, OBER parquet shards are saved under `./datasets/OBER/data/`.
+The dataset retains its upstream license; see its linked Hugging Face card.
+
+## Inference launcher
+
+Quickstart sets the paths automatically. To call the shell launcher directly,
+use absolute paths because it changes into the inference directory:
+
+```bash
+INPUT_DIR="$PWD/inputs/imgs" \
+MASK_DIR="$PWD/inputs/masks" \
+BASE_MODEL_PATH="$PWD/model_weights/ObjectClear" \
+WEIGHT_PATH="$PWD/model_weights/TurboClear/sdxl" \
+FUSION_MODULE_PATH="$PWD/model_weights/TurboClear/fusion/fusion_module.pth" \
+OUTPUT_DIR="$PWD/outputs/inference" \
 bash inference/inference_turboclear.sh
 ```
 
-The student checkpoint directory must contain `state_dict.pth`. The fusion
-checkpoint can be either `fusion_module.pth` or its containing directory.
+Set `CUDA_VISIBLE_DEVICES` to select the GPU (default: `0`). The student directory
+must contain `state_dict.pth`. The fusion path may be the file or its directory.
 
-## Training
+## Training and post-training
 
-Configure the environment variables below, or edit the YAML configuration:
+Activate the same Conda environment and download OBER with `--with-dataset`.
+Run these commands from the repository root:
 
 ```bash
-export TURBOCLEAR_DATASET_PATH=/path/to/OBER/data
-export TURBOCLEAR_VALIDATION_DATASET_PATH=/path/to/OBER-Test
-export TURBOCLEAR_BASE_MODEL_PATH=/path/to/ObjectClear
-export TURBOCLEAR_GENERATOR_CHECKPOINT=/path/to/pretrained/student/checkpoint
-export TURBOCLEAR_OUTPUT_DIR=./outputs/dmd
+export TURBOCLEAR_DATASET_PATH="$PWD/datasets/OBER/data"
+export TURBOCLEAR_BASE_MODEL_PATH="$PWD/model_weights/ObjectClear"
+export TURBOCLEAR_VALIDATION_DATASET_PATH=""
+export TURBOCLEAR_GENERATOR_CHECKPOINT=""
+export TURBOCLEAR_OUTPUT_DIR="$PWD/outputs/dmd"
 bash training/train_dmd_1step_masked_effect.sh
 ```
 
-The fusion post-training stage uses the same dataset and base model variables,
-and additionally reads `TURBOCLEAR_FUSION_CHECKPOINT` when resuming:
+An empty generator checkpoint initializes full-UNet training from ObjectClear.
+Set `TURBOCLEAR_GENERATOR_CHECKPOINT` to a compatible checkpoint when continuing
+from an existing generator. Released inference weights are not a complete
+optimizer/training-state resume checkpoint.
+
+Validation is disabled in this minimal example. To enable it, set
+`TURBOCLEAR_VALIDATION_DATASET_PATH` to a prepared OBER validation directory with
+`image/`, `mask/`, `GT/`, and optionally `effect_mask/`, paired by filename stem.
+The download command fetches raw parquet shards; it does not decode this
+validation directory. The training loader excludes the test parquet, so do not
+point validation at the downloaded training directory or the excluded test file.
+
+For LSF post-training, keep the dataset/base-model variables above and provide
+a trained one-step student (the released student can be used):
 
 ```bash
-export TURBOCLEAR_OUTPUT_DIR=./outputs/fusion
+export TURBOCLEAR_GENERATOR_CHECKPOINT="$PWD/model_weights/TurboClear/sdxl"
+export TURBOCLEAR_OUTPUT_DIR="$PWD/outputs/fusion"
 bash post_training/train_objectclear_fusion_1step.sh
 ```
 
-Both scripts use `accelerate`; adjust the GPU count and accelerator config for
-your machine.
-
-## Release status
-
-Applying Occam's razor, the core source code is kept simple and available in this repository. Download the released model
-files from the [TurboClear Hugging Face repository](https://huggingface.co/JGuo666/TurboClear)
-before running inference. OBER images and masks are not redistributed here.
+To initialize from existing fusion weights, set `TURBOCLEAR_FUSION_CHECKPOINT`
+to `fusion_module.pth`. Both stage launchers default to eight GPUs: edit
+`training/config/accelerate_fsdp_8gpu.yaml` (or set `ACCELERATE_CONFIG` to an
+absolute config path) for DMD training; set `NUM_PROCESSES` for fusion training.
+The YAML files in each stage's `config/` directory define batch size, losses,
+validation, and checkpoint settings. Training's LPIPS loss may download
+pretrained VGG weights into the Torch Hub cache on first use; this is separate
+from the inference model downloader.
 
 ## License
 
