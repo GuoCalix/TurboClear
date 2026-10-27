@@ -70,7 +70,7 @@
           <article class="comparison" style="--position: 52%">
             <img class="comparison-after" src="assets/images/318-result.webp" alt="Calm lake after TurboClear removes a sailboat and its reflection">
             <div class="comparison-before">
-              <img src="assets/images/318-input.webp" alt="Sailboat and reflection selected with a green mask">
+              <img src="assets/images/318-input.webp" alt="Sailboat selected with a green mask on a calm lake">
             </div>
             <input type="range" min="0" max="100" value="52" aria-label="Compare masked sailboat input and TurboClear result">
             <div class="comparison-handle" aria-hidden="true"><span>&harr;</span></div>
@@ -79,22 +79,22 @@
           </article>
 
           <article class="comparison" style="--position: 50%">
-            <img class="comparison-after" src="assets/images/188-result.webp" alt="Pasture after TurboClear removes a foreground sheep">
+            <img class="comparison-after" src="assets/images/230-result.webp" alt="Waterfall after TurboClear removes a person and their shadow">
             <div class="comparison-before">
-              <img src="assets/images/188-input.webp" alt="Foreground sheep selected with a green mask in a pasture">
+              <img src="assets/images/230-input.webp" alt="Person selected with a green mask in front of a waterfall">
             </div>
-            <input type="range" min="0" max="100" value="50" aria-label="Compare masked sheep input and TurboClear result">
+            <input type="range" min="0" max="100" value="50" aria-label="Compare masked person input and TurboClear result">
             <div class="comparison-handle" aria-hidden="true"><span>&harr;</span></div>
             <span class="image-label label-before">Input + mask</span>
             <span class="image-label label-after">TurboClear</span>
           </article>
 
           <article class="comparison" style="--position: 48%">
-            <img class="comparison-after" src="assets/images/328-result.webp" alt="Brick and stucco wall after TurboClear removes a basketball hoop and its shadow">
+            <img class="comparison-after" src="assets/images/181-result.webp" alt="Basketball court after TurboClear removes a foreground player and their shadow">
             <div class="comparison-before">
-              <img src="assets/images/328-input.webp" alt="Basketball hoop selected with a green mask on a brick and stucco wall">
+              <img src="assets/images/181-input.webp" alt="Foreground basketball player selected with a green mask">
             </div>
-            <input type="range" min="0" max="100" value="48" aria-label="Compare masked basketball hoop input and TurboClear result">
+            <input type="range" min="0" max="100" value="48" aria-label="Compare masked basketball player input and TurboClear result">
             <div class="comparison-handle" aria-hidden="true"><span>&harr;</span></div>
             <span class="image-label label-before">Input + mask</span>
             <span class="image-label label-after">TurboClear</span>
@@ -129,25 +129,25 @@
         <div class="section-heading centered">
           <p class="eyebrow">Qualitative results</p>
           <h2 id="results-title">Objects disappear. Structure stays.</h2>
-          <p>Examples selected from the qualitative comparison in the paper.</p>
+          <p>Five OBER-Wild examples from the updated qualitative comparison in the paper.</p>
         </div>
         <div class="result-grid">
           <article class="comparison" style="--position: 50%">
-            <img class="comparison-after" src="assets/images/295-result.webp" alt="Patio after TurboClear removes a foreground chair">
+            <img class="comparison-after" src="assets/images/190-result.webp" alt="Reflective water after TurboClear removes an island and its reflection">
             <div class="comparison-before">
-              <img src="assets/images/295-input.webp" alt="Foreground chair selected with a green mask on a patio">
+              <img src="assets/images/190-input.webp" alt="Island selected with a green mask against a sunset sky">
             </div>
-            <input type="range" min="0" max="100" value="50" aria-label="Compare masked chair input and TurboClear result">
+            <input type="range" min="0" max="100" value="50" aria-label="Compare masked island input and TurboClear result">
             <div class="comparison-handle" aria-hidden="true"><span>&harr;</span></div>
             <span class="image-label label-before">Input + mask</span>
             <span class="image-label label-after">TurboClear</span>
           </article>
           <article class="comparison" style="--position: 50%">
-            <img class="comparison-after" src="assets/images/451-result.webp" alt="Open field after TurboClear removes a foreground cow and its shadow">
+            <img class="comparison-after" src="assets/images/207-result.webp" alt="Sunset over water after TurboClear removes a boat and its reflection">
             <div class="comparison-before">
-              <img src="assets/images/451-input.webp" alt="Foreground cow selected with a green mask">
+              <img src="assets/images/207-input.webp" alt="Boat selected with a green mask on water at sunset">
             </div>
-            <input type="range" min="0" max="100" value="50" aria-label="Compare masked cow input and TurboClear result">
+            <input type="range" min="0" max="100" value="50" aria-label="Compare masked boat input and TurboClear result">
             <div class="comparison-handle" aria-hidden="true"><span>&harr;</span></div>
             <span class="image-label label-before">Input + mask</span>
             <span class="image-label label-after">TurboClear</span>
@@ -155,8 +155,8 @@
         </div>
 
         <figure class="wide-figure">
-          <img src="assets/images/full-comparison.webp" alt="Full qualitative comparison of TurboClear and prior object removal methods" loading="lazy">
-          <figcaption>Extended comparison across representative OBER-Test examples. The complete figure is retained for detailed inspection rather than used as the primary visual.</figcaption>
+          <img src="assets/images/full-comparison.webp?v=20261027" alt="Full qualitative comparison of TurboClear and prior object removal methods" loading="lazy">
+          <figcaption>Comparison on five representative OBER-Wild samples, in the same row and method order as the updated paper.</figcaption>
         </figure>
       </section>
 
@@ -167,7 +167,7 @@
             <h2 id="method-title">Region-aware distillation, spatially learned fusion</h2>
           </div>
           <figure class="method-figure">
-            <img src="assets/images/pipeline.webp" alt="TurboClear training and inference pipeline with RDM and LSF" loading="lazy">
+            <img src="assets/images/pipeline.webp?v=20261027" alt="TurboClear training and inference pipeline with RDM and LSF" loading="lazy">
             <figcaption>
               RDM calibrates distribution matching across affected and preserved regions during training. At inference, LSF predicts latent- and pixel-space gates to combine the generated output with the input stream.
             </figcaption>
