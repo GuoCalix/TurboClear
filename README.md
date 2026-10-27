@@ -29,7 +29,7 @@
 
 **TurboClear removes target objects and their associated visual effects with a single denoising step while preserving unaffected background regions.**
 
-![TurboClear qualitative results](https://raw.githubusercontent.com/GuoCalix/TurboClear/page/assets/images/qualitative-strip.webp)
+![TurboClear qualitative results on five OBER-Wild samples: masked inputs above and outputs below](https://raw.githubusercontent.com/GuoCalix/TurboClear/page/assets/images/qualitative-strip.webp?v=20261027)
 
 </div>
 
@@ -42,7 +42,7 @@
 
 ## Overview
 
-![TurboClear overview](https://raw.githubusercontent.com/GuoCalix/TurboClear/page/assets/images/pipeline.webp)
+![TurboClear overview](https://raw.githubusercontent.com/GuoCalix/TurboClear/page/assets/images/pipeline.webp?v=20261027)
 
 TurboClear addresses the spatial asymmetry of object-effect removal: regions influenced by the target object should be regenerated, while the remaining image should stay unchanged. RDM provides region-aware supervision during one-step distillation, and LSF learns spatial gates for lightweight fusion at inference time.
 
